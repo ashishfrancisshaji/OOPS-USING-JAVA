@@ -1,0 +1,732 @@
+//PYTHON CODING PART (500 LINES)
+
+
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.awt.event.*;
+import java.sql.*;
+import java.io.*;
+import java.util.*;
+import java.util.Date;
+
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.ChartPanel;
+import org.jfree.chart.JFreeChart;
+import org.jfree.data.category.DefaultCategoryDataset;
+
+@SuppressWarnings("unused")
+public class EnhancedStockTradingApp extends JFrame {
+    // Database and user-related fields
+    private Connection connection;
+    private String currentUser;
+    private double balance = 100000.00;
+    private Map<String, Double> stockPrices = new HashMap<>();
+    private Map<String, Integer> portfolio = new HashMap<>();
+    
+    // UI Components
+    private JLabel balanceLabel;
+    private DefaultTableModel stockTableModel;
+    private DefaultTableModel transactionTableModel;
+    private JTable stockTable;
+    private JTable transactionTable;
+    private JTextArea logArea;
+    private JTextField stockField;
+    private JTextField quantityField;
+    private Font monospaceFont;
+
+    // Login components
+    private JFrame loginFrame;
+    private JTextField usernameField;
+    private JPasswordField passwordField;
+    private JButton loginButton;
+    private JLabel statusLabel;
+
+    public EnhancedStockTradingApp() {
+        initializeLoginPage();
+    }
+
+    private void initializeLoginPage() {
+        // Create a separate frame for login
+        loginFrame = new JFrame("Enhanced Stock Trading Application - Login");
+        loginFrame.setLayout(new FlowLayout());
+        loginFrame.setSize(400, 200);
+        loginFrame.setLocationRelativeTo(null);
+        loginFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+        monospaceFont = new Font("Monospaced", Font.BOLD | Font.ITALIC, 16);
+
+        // Create login components
+        JLabel usernameLabel = new JLabel("Username:");
+        JLabel passwordLabel = new JLabel("Password:");
+        usernameField = new JTextField(20);
+        passwordField = new JPasswordField(20);
+        loginButton = new JButton("Login");
+        statusLabel = new JLabel("");
+
+        // Apply font styling
+        usernameLabel.setFont(monospaceFont);
+        passwordLabel.setFont(monospaceFont);
+        usernameField.setFont(monospaceFont);
+        passwordField.setFont(monospaceFont);
+        loginButton.setFont(monospaceFont);
+        statusLabel.setFont(monospaceFont);
+
+        // Add components to frame
+        loginFrame.add(usernameLabel);
+        loginFrame.add(usernameField);
+        loginFrame.add(passwordLabel);
+        loginFrame.add(passwordField);
+        loginFrame.add(loginButton);
+        loginFrame.add(statusLabel);
+
+        // Login button action
+        loginButton.addActionListener(e -> {
+            String username = usernameField.getText();
+            String password = new String(passwordField.getPassword());
+
+            if (validateLogin(username, password)) {
+                currentUser = username;
+                loginFrame.setVisible(false);
+                initializeTradingDashboard();
+            } else {
+                statusLabel.setText("Invalid credentials. Try again.");
+                statusLabel.setForeground(Color.RED);
+            }
+        });
+
+        loginFrame.setVisible(true);
+    }
+
+    private boolean validateLogin(String username, String password) {
+        try {
+            connection = getConnection();
+            String query = "SELECT * FROM users WHERE username = ? AND password = SHA2(?, 256)";
+            PreparedStatement stmt = connection.prepareStatement(query);
+            stmt.setString(1, username);
+            stmt.setString(2, password);
+            ResultSet rs = stmt.executeQuery();
+            return rs.next();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    private Connection getConnection() throws SQLException {
+        String url = "jdbc:mysql://localhost:3306/strade";
+        String user = "root";
+        String password = "alzic"; // Update with your database password
+        return DriverManager.getConnection(url, user, password);
+    }
+
+    private void initializeTradingDashboard() {
+        initializeStockPrices();
+        loadUserData();
+        setupMainFrame();
+        createTopPanel();
+        createCenterPanel();
+        createBottomPanel();
+        setVisible(true);
+    }
+
+    private void initializeStockPrices() {
+        stockPrices.put("AAPL", 150.00);
+        stockPrices.put("GOOGL", 2800.00);
+        stockPrices.put("MSFT", 300.00);
+        stockPrices.put("TSLA", 800.00);
+        stockPrices.put("AMZN", 3500.00);
+        stockPrices.put("META", 3250.00);
+        stockPrices.put("GOLD", 1800.00);
+    }
+
+    private void loadUserData() {
+        try {
+            String query = "SELECT balance FROM users WHERE username = ?";
+            PreparedStatement statement = connection.prepareStatement(query);
+            statement.setString(1, currentUser);
+            ResultSet resultSet = statement.executeQuery();
+            if (resultSet.next()) {
+                balance = resultSet.getDouble("balance");
+            }
+
+            query = "SELECT stock_symbol, quantity FROM portfolio WHERE username = ?";
+            statement = connection.prepareStatement(query);
+            statement.setString(1, currentUser);
+            resultSet = statement.executeQuery();
+            while (resultSet.next()) {
+                portfolio.put(resultSet.getString("stock_symbol"), resultSet.getInt("quantity"));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void setupMainFrame() {
+        setTitle("Enhanced Stock Trading Dashboard - Welcome " + currentUser);
+        setLayout(new BorderLayout());
+        setExtendedState(JFrame.MAXIMIZED_BOTH);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+    }
+
+    private void createTopPanel() {
+        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        
+        // Initialize components
+        balanceLabel = new JLabel("Balance: $" + String.format("%.2f", balance));
+        stockField = new JTextField(10);
+        quantityField = new JTextField(5);
+        JButton buyButton = new JButton("Buy");
+        JButton sellButton = new JButton("Sell");
+        JButton refreshButton = new JButton("Refresh");
+        JButton exportButton = new JButton("Export Transactions");
+        JButton calculatorButton = new JButton("Calculator");
+        JButton graphButton = new JButton("Stock Graph");
+        JButton portfolioButton = new JButton("Portfolio Management");
+
+        // Apply styling
+        Component[] components = {balanceLabel, stockField, quantityField, buyButton, 
+                                sellButton, refreshButton, exportButton, calculatorButton, 
+                                graphButton, portfolioButton};
+        for (Component comp : components) {
+            comp.setFont(monospaceFont);
+            topPanel.add(comp);
+        }
+
+        // Add labels
+        topPanel.add(new JLabel("Stock Symbol:"), 1);
+        topPanel.add(new JLabel("Quantity:"), 3);
+
+        // Add action listeners
+        buyButton.addActionListener(e -> executeTrade("Buy"));
+        sellButton.addActionListener(e -> executeTrade("Sell"));
+        refreshButton.addActionListener(e -> refreshStockPrices());
+        exportButton.addActionListener(e -> exportTransactions());
+        calculatorButton.addActionListener(e -> openCalculator());
+        graphButton.addActionListener(e -> openStockGraph());
+        portfolioButton.addActionListener(e -> openPortfolioManagement());
+
+        add(topPanel, BorderLayout.NORTH);
+    }
+
+    private void createCenterPanel() {
+        JSplitPane centerSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+        
+        // Stock table
+        String[] stockColumns = {"Stock Symbol", "Price", "Quantity Owned"};
+        stockTableModel = new DefaultTableModel(stockColumns, 0);
+        stockTable = new JTable(stockTableModel);
+        stockTable.setFont(monospaceFont);
+        JScrollPane stockScrollPane = new JScrollPane(stockTable);
+        
+        // Transaction table
+        String[] transactionColumns = {"Date", "Stock", "Action", "Quantity", "Price", "Total"};
+        transactionTableModel = new DefaultTableModel(transactionColumns, 0);
+        transactionTable = new JTable(transactionTableModel);
+        transactionTable.setFont(monospaceFont);
+        JScrollPane transactionScrollPane = new JScrollPane(transactionTable);
+
+        centerSplitPane.setLeftComponent(stockScrollPane);
+        centerSplitPane.setRightComponent(transactionScrollPane);
+        centerSplitPane.setDividerLocation(0.5);
+
+        add(centerSplitPane, BorderLayout.CENTER);
+        updateStockTable();
+    }
+
+    private void createBottomPanel() {
+        logArea = new JTextArea(10, 50);
+        logArea.setFont(monospaceFont);
+        logArea.setEditable(false);
+        JScrollPane logScrollPane = new JScrollPane(logArea);
+        add(logScrollPane, BorderLayout.SOUTH);
+    }
+
+    private void executeTrade(String action) {
+        String symbol = stockField.getText().toUpperCase();
+        int quantity;
+        try {
+            quantity = Integer.parseInt(quantityField.getText());
+        } catch (NumberFormatException ex) {
+            logArea.append("Please enter a valid quantity.\n");
+            return;
+        }
+
+        Double stockPrice = stockPrices.get(symbol);
+        if (stockPrice == null) {
+            logArea.append("Invalid stock symbol.\n");
+            return;
+        }
+
+        double totalCost = stockPrice * quantity;
+
+        if (action.equals("Buy")) {
+            if (balance >= totalCost) {
+                balance -= totalCost;
+                portfolio.put(symbol, portfolio.getOrDefault(symbol, 0) + quantity);
+                saveTransaction(symbol, action, quantity, totalCost);
+                logArea.append("Bought " + quantity + " shares of " + symbol + " at $" + stockPrice + " each.\n");
+            } else {
+                logArea.append("Insufficient balance for this transaction.\n");
+                return;
+            }
+        } else { // Sell
+            if (portfolio.getOrDefault(symbol, 0) >= quantity) {
+                balance += totalCost;
+                portfolio.put(symbol, portfolio.get(symbol) - quantity);
+                saveTransaction(symbol, action, quantity, totalCost);
+                logArea.append("Sold " + quantity + " shares of " + symbol + " at $" + stockPrice + " each.\n");
+            } else {
+                logArea.append("Insufficient shares for this transaction.\n");
+                return;
+            }
+        }
+
+        balanceLabel.setText("Balance: $" + String.format("%.2f", balance));
+        updateStockTable();
+        updateUserBalance();
+    }
+
+    private void saveTransaction(String symbol, String action, int quantity, double totalCost) {
+        // Update database
+        try {
+            String query = "INSERT INTO transactions (username, stock_symbol, action, quantity, total_cost) " +
+                          "VALUES (?, ?, ?, ?, ?)";
+            PreparedStatement stmt = connection.prepareStatement(query);
+            stmt.setString(1, currentUser);
+            stmt.setString(2, symbol);
+            stmt.setString(3, action);
+            stmt.setInt(4, quantity);
+            stmt.setDouble(5, totalCost);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        // Update transaction table
+        transactionTableModel.addRow(new Object[]{
+            new Date().toString(),
+            symbol,
+            action,
+            quantity,
+            "$" + String.format("%.2f", stockPrices.get(symbol)),
+            "$" + String.format("%.2f", totalCost)
+        });
+    }
+
+    private void updateUserBalance() {
+        try {
+            String query = "UPDATE users SET balance = ? WHERE username = ?";
+            PreparedStatement stmt = connection.prepareStatement(query);
+            stmt.setDouble(1, balance);
+            stmt.setString(2, currentUser);
+            stmt.executeUpdate();
+        } 
+        catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void refreshStockPrices() {
+        Random rand = new Random();
+        for (String symbol : stockPrices.keySet()) {
+            double currentPrice = stockPrices.get(symbol);
+            double change = (rand.nextDouble() * 2 - 1) * 0.05 * currentPrice;
+            stockPrices.put(symbol, Math.round((currentPrice + change) * 100.0) / 100.0);
+        }
+
+        updateStockTable();
+        logArea.append("Stock prices have been refreshed.\n");
+    }
+
+    private void updateStockTable() {
+        stockTableModel.setRowCount(0);
+        for (String symbol : stockPrices.keySet()) {
+            double price = stockPrices.get(symbol);
+            int quantity = portfolio.getOrDefault(symbol, 0);
+            stockTableModel.addRow(new Object[]{
+                symbol,
+                "$" + String.format("%.2f", price),
+                quantity
+            });
+        }
+    }
+
+    private void exportTransactions() {
+        try (FileWriter writer = new FileWriter("transactions_" + currentUser + ".csv")) {
+            writer.write("Date,Stock,Action,Quantity,Price,Total\n");
+            
+            for (int i = 0; i < transactionTableModel.getRowCount(); i++) {
+                for (int j = 0; j < transactionTableModel.getColumnCount(); j++) {
+                    writer.write(transactionTableModel.getValueAt(i, j).toString());
+                    writer.write(j < transactionTableModel.getColumnCount() - 1 ? "," : "\n");
+                }
+            }
+            
+            JOptionPane.showMessageDialog(this, "Transactions exported successfully!");
+        } catch (IOException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error exporting transactions!", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void openCalculator() {
+        JDialog calculatorDialog = new JDialog(this, "Stock Price Calculator", true);
+        calculatorDialog.setLayout(new FlowLayout());
+        calculatorDialog.setSize(400, 300);
+
+        JComboBox<String> stockDropdown = new JComboBox<>(stockPrices.keySet().toArray(new String[0]));
+        JTextField priceField = new JTextField(10);
+        JButton calculateButton = new JButton("Calculate");
+        JLabel resultLabel = new JLabel("Total Value: ");
+
+        Component[] components = {stockDropdown, priceField, calculateButton, resultLabel};
+        for (Component comp : components) {
+            comp.setFont(monospaceFont);
+            calculatorDialog.add(comp);
+        }
+
+        calculateButton.addActionListener(e -> {
+            String selectedStock = (String) stockDropdown.getSelectedItem();
+            try {
+                double price = Double.parseDouble(priceField.getText());
+                int quantity = portfolio.getOrDefault(selectedStock, 0);
+                double totalValue = price * quantity;
+                resultLabel.setText("Total Value: $" + String.format("%.2f", totalValue));
+            } catch (NumberFormatException ex) {
+                resultLabel.setText("Please enter a valid price!");
+            }
+        });
+
+        calculatorDialog.setLocationRelativeTo(this);
+        calculatorDialog.setVisible(true);
+    }
+
+    private void openStockGraph() {
+        // Create a new dataset to hold stock price information
+        DefaultCategoryDataset dataset = new DefaultCategoryDataset();
+        
+        // Iterate through stock prices and add each stock to the dataset
+        for (String symbol : stockPrices.keySet()) {
+            dataset.addValue(stockPrices.get(symbol), "Current Price", symbol);
+        }
+        
+        // Create a bar chart using JFreeChart with custom parameters
+        JFreeChart chart = ChartFactory.createBarChart(
+            "Current Stock Prices", // Chart title
+            "Stock Symbols",        // X-Axis Label
+            "Price ($)",            // Y-Axis Label
+            dataset
+        );
+        
+        // Create a panel to display the chart with preferred dimensions
+        ChartPanel chartPanel = new ChartPanel(chart);
+        chartPanel.setPreferredSize(new Dimension(560, 370));
+        
+        // Create a modal dialog to contain and display the chart
+        JDialog graphDialog = new JDialog(this, "Stock Price Graph", true);
+        graphDialog.setContentPane(chartPanel);
+        graphDialog.pack();
+        graphDialog.setLocationRelativeTo(this);
+        graphDialog.setVisible(true);
+    }
+
+    private void openPortfolioManagement() {
+        JDialog portfolioDialog = new JDialog(this, "Portfolio Management", true);
+        portfolioDialog.setLayout(new BorderLayout());
+        portfolioDialog.setSize(600, 400);
+
+        // Create portfolio summary table
+        String[] columns = {"Stock", "Quantity", "Current Value", "Profit/Loss"};
+        DefaultTableModel portfolioModel = new DefaultTableModel(columns, 0);
+        JTable portfolioTable = new JTable(portfolioModel);
+        portfolioTable.setFont(monospaceFont);
+
+        // Calculate and display portfolio statistics
+        double totalValue = 0.0;
+        double totalProfitLoss = 0.0;
+
+        for (Map.Entry<String, Integer> entry : portfolio.entrySet()) {
+            String symbol = entry.getKey();
+            int quantity = entry.getValue();
+            double currentPrice = stockPrices.get(symbol);
+            double currentValue = quantity * currentPrice;
+            
+            // Assuming a simple 10% increase as the purchase price for demo purposes
+            double purchasePrice = currentPrice / 1.1;
+            double profitLoss = currentValue - (quantity * purchasePrice);
+            
+            totalValue += currentValue;
+            totalProfitLoss += profitLoss;
+
+            portfolioModel.addRow(new Object[]{
+                symbol,
+                quantity,
+                "$" + String.format("%.2f", currentValue),
+                "$" + String.format("%.2f", profitLoss)
+            });
+        }
+
+        // Create summary panel
+        JPanel summaryPanel = new JPanel(new GridLayout(2, 2, 10, 10));
+        summaryPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        JLabel totalValueLabel = new JLabel("Total Portfolio Value: $" + String.format("%.2f", totalValue));
+        JLabel profitLossLabel = new JLabel("Total Profit/Loss: $" + String.format("%.2f", totalProfitLoss));
+        
+        totalValueLabel.setFont(monospaceFont);
+        profitLossLabel.setFont(monospaceFont);
+        
+        summaryPanel.add(totalValueLabel);
+        summaryPanel.add(profitLossLabel);
+
+        // Add components to dialog
+        portfolioDialog.add(new JScrollPane(portfolioTable), BorderLayout.CENTER);
+        portfolioDialog.add(summaryPanel, BorderLayout.SOUTH);
+
+        portfolioDialog.setLocationRelativeTo(this);
+        portfolioDialog.setVisible(true);
+    }
+
+    public static void main(String[] args) {
+        try {
+            // Set look and feel to system default
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        SwingUtilities.invokeLater(() -> {
+            new EnhancedStockTradingApp();
+        });
+    }
+}
+
+
+//DATABSE MANAGEMNT PART( 225 LINES )
+
+CREATE DATABASE strade;
+USE strade;
+
+-- Users table to store authentication and balance information
+CREATE TABLE users (
+    user_id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password VARCHAR(256) NOT NULL,  -- Stored as SHA2 hash
+    balance DECIMAL(15, 2) NOT NULL DEFAULT 100000.00,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    account_status ENUM('active', 'suspended', 'closed') DEFAULT 'active',
+    CONSTRAINT chk_balance CHECK (balance >= 0)
+);
+
+-- Stocks table to store stock information
+CREATE TABLE stocks (
+    stock_id INT PRIMARY KEY AUTO_INCREMENT,
+    symbol VARCHAR(10) UNIQUE NOT NULL,
+    company_name VARCHAR(100) NOT NULL,
+    current_price DECIMAL(15, 2) NOT NULL,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    daily_high DECIMAL(15, 2),
+    daily_low DECIMAL(15, 2),
+    volume BIGINT DEFAULT 0,
+    market_cap DECIMAL(20, 2),
+    CONSTRAINT chk_price CHECK (current_price > 0)
+);
+
+-- Portfolio table to track user holdings
+CREATE TABLE portfolio (
+    portfolio_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    stock_id INT NOT NULL,
+    quantity INT NOT NULL DEFAULT 0,
+    average_purchase_price DECIMAL(15, 2) NOT NULL,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    FOREIGN KEY (stock_id) REFERENCES stocks(stock_id),
+    CONSTRAINT chk_quantity CHECK (quantity >= 0),
+    UNIQUE KEY unique_user_stock (user_id, stock_id)
+);
+
+-- Transactions table to track all trades
+CREATE TABLE transactions (
+    transaction_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    stock_id INT NOT NULL,
+    transaction_type ENUM('buy', 'sell') NOT NULL,
+    quantity INT NOT NULL,
+    price_per_share DECIMAL(15, 2) NOT NULL,
+    total_amount DECIMAL(15, 2) NOT NULL,
+    transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('pending', 'completed', 'cancelled', 'failed') DEFAULT 'completed',
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    FOREIGN KEY (stock_id) REFERENCES stocks(stock_id)
+);
+
+-- Price history table for tracking stock prices
+CREATE TABLE price_history (
+    history_id INT PRIMARY KEY AUTO_INCREMENT,
+    stock_id INT NOT NULL,
+    price DECIMAL(15, 2) NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (stock_id) REFERENCES stocks(stock_id)
+);
+
+-- Create indexes for better query performance
+CREATE INDEX idx_transactions_user ON transactions(user_id);
+CREATE INDEX idx_transactions_stock ON transactions(stock_id);
+CREATE INDEX idx_portfolio_user ON portfolio(user_id);
+CREATE INDEX idx_price_history_stock ON price_history(stock_id);
+CREATE INDEX idx_price_history_timestamp ON price_history(timestamp);
+
+-- Stored procedure for executing trades
+DELIMITER //
+CREATE PROCEDURE execute_trade(
+    IN p_username VARCHAR(50),
+    IN p_symbol VARCHAR(10),
+    IN p_transaction_type ENUM('buy', 'sell'),
+    IN p_quantity INT,
+    OUT p_status VARCHAR(50)
+)
+BEGIN
+    DECLARE v_user_id INT;
+    DECLARE v_stock_id INT;
+    DECLARE v_current_price DECIMAL(15, 2);
+    DECLARE v_total_amount DECIMAL(15, 2);
+    DECLARE v_current_balance DECIMAL(15, 2);
+    DECLARE v_current_shares INT;
+    
+    START TRANSACTION;
+    
+    -- Get user and stock information
+    SELECT user_id, balance INTO v_user_id, v_current_balance
+    FROM users WHERE username = p_username FOR UPDATE;
+    
+    SELECT stock_id, current_price INTO v_stock_id, v_current_price
+    FROM stocks WHERE symbol = p_symbol;
+    
+    SET v_total_amount = p_quantity * v_current_price;
+    
+    -- Check if transaction is valid
+    IF p_transaction_type = 'buy' THEN
+        IF v_current_balance >= v_total_amount THEN
+            -- Update user balance
+            UPDATE users 
+            SET balance = balance - v_total_amount
+            WHERE user_id = v_user_id;
+            
+            -- Update or insert portfolio entry
+            INSERT INTO portfolio (user_id, stock_id, quantity, average_purchase_price)
+            VALUES (v_user_id, v_stock_id, p_quantity, v_current_price)
+            ON DUPLICATE KEY UPDATE 
+                quantity = quantity + p_quantity,
+                average_purchase_price = ((average_purchase_price * quantity) + (v_current_price * p_quantity)) / (quantity + p_quantity);
+                
+            SET p_status = 'success';
+        ELSE
+            SET p_status = 'insufficient_funds';
+            ROLLBACK;
+        END IF;
+    ELSE -- sell
+        SELECT COALESCE(quantity, 0) INTO v_current_shares
+        FROM portfolio 
+        WHERE user_id = v_user_id AND stock_id = v_stock_id;
+        
+        IF v_current_shares >= p_quantity THEN
+            -- Update user balance
+            UPDATE users 
+            SET balance = balance + v_total_amount
+            WHERE user_id = v_user_id;
+            
+            -- Update portfolio
+            UPDATE portfolio
+            SET quantity = quantity - p_quantity
+            WHERE user_id = v_user_id AND stock_id = v_stock_id;
+            
+            SET p_status = 'success';
+        ELSE
+            SET p_status = 'insufficient_shares';
+            ROLLBACK;
+        END IF;
+    END IF;
+    
+    IF p_status = 'success' THEN
+        -- Record transaction
+        INSERT INTO transactions (user_id, stock_id, transaction_type, quantity, price_per_share, total_amount)
+        VALUES (v_user_id, v_stock_id, p_transaction_type, p_quantity, v_current_price, v_total_amount);
+        
+        COMMIT;
+    END IF;
+END //
+DELIMITER ;
+
+-- Stored procedure for updating stock prices
+DELIMITER //
+CREATE PROCEDURE update_stock_price(
+    IN p_symbol VARCHAR(10),
+    IN p_new_price DECIMAL(15, 2)
+)
+BEGIN
+    DECLARE v_stock_id INT;
+    DECLARE v_old_price DECIMAL(15, 2);
+    
+    SELECT stock_id, current_price INTO v_stock_id, v_old_price
+    FROM stocks WHERE symbol = p_symbol;
+    
+    UPDATE stocks 
+    SET current_price = p_new_price,
+        daily_high = GREATEST(COALESCE(daily_high, p_new_price), p_new_price),
+        daily_low = LEAST(COALESCE(daily_low, p_new_price), p_new_price)
+    WHERE stock_id = v_stock_id;
+    
+    -- Record in price history
+    INSERT INTO price_history (stock_id, price)
+    VALUES (v_stock_id, p_new_price);
+END //
+DELIMITER ;
+
+-- Insert sample data
+INSERT INTO stocks (symbol, company_name, current_price, market_cap) VALUES
+('AAPL', 'Apple Inc.', 150.00, 2500000000000.00),
+('GOOGL', 'Alphabet Inc.', 2800.00, 1800000000000.00),
+('MSFT', 'Microsoft Corporation', 300.00, 2200000000000.00),
+('AMZN', 'Amazon.com Inc.', 3500.00, 1700000000000.00),
+('TSLA', 'Tesla Inc.', 800.00, 800000000000.00),
+('META', 'Meta Platforms Inc.', 325.00, 850000000000.00),
+('NVDA', 'NVIDIA Corporation', 450.00, 1100000000000.00);
+
+-- Insert sample user
+INSERT INTO users (username, password, email) VALUES
+('KING', SHA2('ALZIC', 256), 'kingalzic@gmail.com');
+
+-- Create view for portfolio summary
+CREATE VIEW portfolio_summary AS
+SELECT 
+    u.username,
+    s.symbol,
+    s.company_name,
+    p.quantity,
+    p.average_purchase_price,
+    s.current_price,
+    (p.quantity * s.current_price) as current_value,
+    ((s.current_price - p.average_purchase_price) * p.quantity) as unrealized_profit_loss
+FROM users u
+JOIN portfolio p ON u.user_id = p.user_id
+JOIN stocks s ON p.stock_id = s.stock_id;
+
+-- Create view for transaction history
+CREATE VIEW transaction_history AS
+SELECT 
+    u.username,
+    s.symbol,
+    t.transaction_type,
+    t.quantity,
+    t.price_per_share,
+    t.total_amount,
+    t.transaction_date,
+    t.status
+FROM transactions t
+JOIN users u ON t.user_id = u.user_id
+JOIN stocks s ON t.stock_id = s.stock_id
+ORDER BY t.transaction_date DESC;
